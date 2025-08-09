@@ -2,149 +2,137 @@
 import pandas as pd
 import pdfplumber
 import re
-from typing import List, Dict, Tuple, Any
+from collections import defaultdict
 
 def parse(pdf_path: str) -> pd.DataFrame:
-    """
-    Parses a bank statement PDF to extract transaction data into a pandas DataFrame.
-
-    Args:
-        pdf_path (str): The path to the PDF file.
-
-    Returns:
-        pd.DataFrame: A DataFrame containing the transaction data with columns
-                      ['Date', 'Description', 'Debit Amt', 'Credit Amt', 'Balance'].
-    """
-
-    all_data_rows: List[Dict[str, Any]] = []
-
-    # Define the exact target column names and their order for the DataFrame
-    expected_cols = ['Date', 'Description', 'Debit Amt', 'Credit Amt', 'Balance']
-
+    all_data = []
+    
     with pdfplumber.open(pdf_path) as pdf:
-        for page in pdf.pages:
-            words = page.extract_words(keep_blank_chars=False)
+        for page_num, page in enumerate(pdf.pages):
+            words = page.extract_words()
 
-            # Group words by their rounded 'top' coordinate to form lines
-            lines_by_top: Dict[float, List[Dict[str, Any]]] = {}
+            header_bottom = 0
+            header_x_coords = {}
+            found_header = False
+            
+            # 1) Find the header line containing 'Date', 'Description', 'Balance', 'Debit', 'Credit'
+            # Group words by rounded top coordinate to form lines
+            words_by_line = defaultdict(list)
             for word in words:
-                # Round top to 1 decimal place for robust line grouping
-                top_key = round(word['top'], 1)
-                if top_key not in lines_by_top:
-                    lines_by_top[top_key] = []
-                lines_by_top[top_key].append(word)
+                line_key = round(word['top'], 2) 
+                words_by_line[line_key].append(word)
 
-            header_line_words: List[Dict[str, Any]] = []
-            header_bottom: float = 0.0
+            sorted_line_keys = sorted(words_by_line.keys())
 
-            # Find the header line
-            # Iterate through lines sorted by their top position
-            for top_key in sorted(lines_by_top.keys()):
-                line_words = sorted(lines_by_top[top_key], key=lambda w: w['x0'])
+            for line_key in sorted_line_keys:
+                line_words = sorted(words_by_line[line_key], key=lambda x: x['x0'])
                 line_text = " ".join([w['text'] for w in line_words])
 
-                # Check for required header words using regex for robustness with "Amt"
-                # The regex ensures "Debit" or "Credit" are followed by "Amt" possibly with space
-                if (re.search(r'\bDate\b', line_text) and
-                    re.search(r'\bDescription\b', line_text) and
-                    re.search(r'\bDebit\s*Amt\b', line_text) and
-                    re.search(r'\bCredit\s*Amt\b', line_text) and
-                    re.search(r'\bBalance\b', line_text)):
+                # Check if the line contains all required header components
+                if all(keyword in line_text for keyword in ['Date', 'Description', 'Balance', 'Debit', 'Credit']):
                     
-                    header_line_words = line_words
-                    header_bottom = max(w['bottom'] for w in line_words)
-                    break
-            
-            if not header_line_words:
-                # If no header is found on this page, skip it (e.g., cover pages, summary pages)
-                continue
+                    # Record x0 positions for each relevant header word
+                    for word_obj in line_words:
+                        if word_obj['text'] == 'Date':
+                            header_x_coords['Date'] = word_obj['x0']
+                        elif word_obj['text'] == 'Description':
+                            header_x_coords['Description'] = word_obj['x0']
+                        elif word_obj['text'] == 'Debit': # Use 'Debit' word's x0 for 'Debit Amt' column
+                            header_x_coords['Debit Amt'] = word_obj['x0']
+                        elif word_obj['text'] == 'Credit': # Use 'Credit' word's x0 for 'Credit Amt' column
+                            header_x_coords['Credit Amt'] = word_obj['x0']
+                        elif word_obj['text'] == 'Balance':
+                            header_x_coords['Balance'] = word_obj['x0']
 
-            # Derive reference x0s for logical columns from header words.
-            # These are used as anchors to define the data column boundaries.
-            col_ref_x0s: Dict[str, float] = {}
-            for word in header_line_words:
-                if word['text'] == 'Date':
-                    col_ref_x0s['Date'] = word['x0']
-                elif word['text'] == 'Description':
-                    col_ref_x0s['Description'] = word['x0']
-                elif word['text'] == 'Debit':
-                    # Use 'Debit' word's x0 for the 'Debit Amt' column
-                    col_ref_x0s['Debit Amt'] = word['x0']
-                elif word['text'] == 'Credit':
-                    # Use 'Credit' word's x0 for the 'Credit Amt' column
-                    col_ref_x0s['Credit Amt'] = word['x0']
-                elif word['text'] == 'Balance':
-                    col_ref_x0s['Balance'] = word['x0']
+                    # Verify all target header x0s were found
+                    if all(col in header_x_coords for col in ['Date', 'Description', 'Debit Amt', 'Credit Amt', 'Balance']):
+                        # FIX: Add a small buffer to header_bottom to ensure the header line itself
+                        # is not picked up by the subsequent crop and extract_words.
+                        header_bottom = max(w['bottom'] for w in line_words) + 1 
+                        found_header = True
+                        break
             
-            # Ensure all required header reference x0s are found
-            # This check is less critical now as final_column_bounds are hardcoded.
-            # However, it's good practice to ensure header detection before proceeding.
-            if not all(col in col_ref_x0s for col in ['Date', 'Description', 'Debit Amt', 'Credit Amt', 'Balance']):
-                continue # Skip page if header mapping is incomplete
+            if not found_header:
+                # If header is not found on this page, and it's not the first page, skip it.
+                # If it's the first page and no header, raise an error.
+                if page_num == 0:
+                    raise ValueError("Header line not found in the PDF on the first page.")
+                continue # Skip to the next page if no header (e.g., summary pages or blank pages)
 
-            # Define effective column boundaries (x0, x1) for data extraction.
-            # These values are precisely tuned based on the provided PDF diagnostics
-            # to correctly separate words into their respective columns, especially
-            # to prevent 'Description' words from being assigned to 'Date'.
-            final_column_bounds: Dict[str, Tuple[float, float]] = {
-                'Date': (45.0, 130.0),          # Date words typically end around 90, so 130 provides a clear cut-off.
-                'Description': (130.0, 285.0),  # Description words start around 134-145, end before Debit Amt.
-                'Debit Amt': (285.0, 400.0),    # Debit Amt words start around 293, end before Credit Amt.
-                'Credit Amt': (400.0, 520.0),   # Credit Amt words start around 409, end before Balance.
-                'Balance': (520.0, page.width)  # Balance words start around 527, end at page width.
-            }
+            # 2) Record x0 positions for each header (left boundaries), append page.width as rightmost boundary.
+            column_names = ['Date', 'Description', 'Debit Amt', 'Credit Amt', 'Balance']
             
-            # Crop the page to only include the data table below the header
+            # Prepare x-coordinates of the header words in the logical order of columns
+            header_word_x_coords_ordered = [
+                header_x_coords['Date'],
+                header_x_coords['Description'],
+                header_x_coords['Debit Amt'], 
+                header_x_coords['Credit Amt'],
+                header_x_coords['Balance']
+            ]
+            
+            # Define column boundaries based on midpoints of header x-coordinates
+            ordered_boundaries = []
+            current_left_x_boundary = page.bbox[0] # Start first column from the absolute left of the page
+            
+            for i, col_name in enumerate(column_names):
+                if i < len(header_word_x_coords_ordered) - 1:
+                    # The right boundary of current column is the midpoint between its header and the next header
+                    midpoint_x = (header_word_x_coords_ordered[i] + header_word_x_coords_ordered[i+1]) / 2
+                    right_x_boundary = midpoint_x
+                else:
+                    # The last column extends to the right edge of the page
+                    right_x_boundary = page.width
+                
+                ordered_boundaries.append((col_name, current_left_x_boundary, right_x_boundary))
+                current_left_x_boundary = right_x_boundary # Next column starts where this one ends
+
+            # 3) Crop below header and extract_words() from the cropped page.
+            # The header_bottom was adjusted by +1 to ensure header itself is not included.
             cropped_page = page.crop((0, header_bottom, page.width, page.height))
-            data_words = cropped_page.extract_words(keep_blank_chars=False)
+            data_words = cropped_page.extract_words()
 
-            # Group data words into rows
-            data_rows: Dict[float, List[Dict[str, Any]]] = {}
+            # 4) Group words into rows by rounded 'top'.
+            data_words_by_line = defaultdict(list)
             for word in data_words:
-                row_key = round(word['top'], 1) # Use 1 decimal place for robustness in row grouping
-                if row_key not in data_rows:
-                    data_rows[row_key] = []
-                data_rows[row_key].append(word)
+                line_key = round(word['top'], 2)
+                data_words_by_line[line_key].append(word)
 
-            # Process each row
-            for row_key in sorted(data_rows.keys()):
-                row_words = sorted(data_rows[row_key], key=lambda w: w['x0'])
-                
-                current_row_data_temp: Dict[str, List[str]] = {col: [] for col in expected_cols}
-                
-                for word in row_words:
-                    word_x0 = word['x0']
-                    word_text = word['text']
-                    
-                    # Assign word to the correct column based on its x0 and the defined column boundaries
-                    # Iterate through expected_cols in order to ensure consistent and correct assignment,
-                    # prioritizing left-most columns.
-                    for col_name in expected_cols:
-                        col_x0, col_x1 = final_column_bounds[col_name]
-                        
-                        # A word's starting x-coordinate must be within the column's x-interval [x0, x1)
-                        if col_x0 <= word_x0 < col_x1:
-                            current_row_data_temp[col_name].append(word_text)
-                            break # Assign to the first matching column and move to the next word
-                
-                # Join words within each column with a single space
-                processed_row: Dict[str, str] = {col: " ".join(words).strip() 
-                                                 for col, words in current_row_data_temp.items()}
-                
-                # Basic validation to filter out non-data rows (e.g., footers, page numbers)
-                # A data row should start with a date pattern DD-MM-YYYY
-                if not re.match(r'\d{2}-\d{2}-\d{4}', processed_row['Date']):
-                    continue # Skip row if Date column doesn't match expected format
-                
-                all_data_rows.append(processed_row)
+            # 5) For each row, place each word into the correct column by checking x0 against header boundaries.
+            # 6) Join adjacent words in same column with single spaces.
+            current_page_data = []
+            for line_key in sorted(data_words_by_line.keys()):
+                line_words = sorted(data_words_by_line[line_key], key=lambda x: x['x0'])
+                row_data_dict = {col_name: [] for col_name in column_names}
 
-    # Create DataFrame from collected data
-    df = pd.DataFrame(all_data_rows, columns=expected_cols)
+                for word in line_words:
+                    for col_name, left_bound, right_bound in ordered_boundaries:
+                        # Assign word to the column whose x-range its x0 falls into
+                        if left_bound <= word['x0'] < right_bound:
+                            row_data_dict[col_name].append(word['text'])
+                            break # Move to the next word once assigned
 
-    # Convert amount columns to numeric types (float) and handle empty strings as NaN
-    for col in ['Debit Amt', 'Credit Amt', 'Balance']:
-        # Replace empty strings with NaN first, then convert to numeric
-        df[col] = df[col].replace('', float('nan'))
-        df[col] = pd.to_numeric(df[col])
+                # Join collected words for each column
+                parsed_row = [
+                    " ".join(row_data_dict['Date']).strip(),
+                    " ".join(row_data_dict['Description']).strip(),
+                    " ".join(row_data_dict['Debit Amt']).strip(),
+                    " ".join(row_data_dict['Credit Amt']).strip(),
+                    " ".join(row_data_dict['Balance']).strip()
+                ]
+                
+                # Filter out empty rows or non-data rows (e.g., footers, page numbers)
+                # A valid data row should at least have a Date.
+                if parsed_row[0]: 
+                    all_data.append(parsed_row)
     
+    # 7) Return a pandas.DataFrame with exact column names and types matching the CSV
+    df = pd.DataFrame(all_data, columns=column_names)
+
+    # Convert numeric columns to float, treating empty strings as NaN for pd.DataFrame.equals comparison
+    for col in ['Debit Amt', 'Credit Amt', 'Balance']:
+        # Replace empty strings with NaN for numeric conversion
+        df[col] = df[col].replace('', float('nan'))
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+
     return df
