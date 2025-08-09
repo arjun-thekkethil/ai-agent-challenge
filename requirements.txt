@@ -1,0 +1,9 @@
+pandas>=1.5
+pdfplumber>=0.7
+pytest
+typer
+rich
+google-genai        
+groq                
+langgraph           
+python-dotenv
