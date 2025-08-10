@@ -69,14 +69,10 @@ ai-agent-challenge/
 
 
 ### Main Challenge Demo
-
-[![Main Demo](https://img.shields.io/badge/Watch%20Main%20Demo-Video-blue)]([https://drive.google.com/file/d/1bEs-nQp-7sCbjiVstI2XSweljP4LHKP3/view?usp=sharing](https://drive.google.com/file/d/1bEs-zQPw7sCbjlVstlZXSm9ljP4LHXPJ/view?usp=sharing))
-This is the 60-second demo required by the challenge -- showing a fresh clone -> `agent.py` -> `pytest` passing.
+[![Main Demo](https://img.shields.io/badge/Watch%20Main%20Demo-Video-blue)](https://drive.google.com/file/d/1bEs-zQPw7sCbjlVstlZXSm9ljP4LHXPJ/view?usp=sharing)
 
 ### Extra Detailed Walkthrough
-
-[![Detailed Demo](https://img.shields.io/badge/Watch%20Detailed%20Demo-Video-orange)](https://drive.google.com/file/d/1ThRVSnksAl_gYuoovikHi1lu2hx4oMKW/view?usp=sharing)
-A longer, in-depth explanation of the solution architecture, design decisions, and debugging steps.
+[![Detailed Demo](https://img.shields.io/badge/Watch%20Detailed%20Demo-Video-orange)](https://drive.google.com/file/d/1TbRv5WsHl_qYvoovikHilu2hXv4dmkNd/view?usp=sharing)
 
 🧪 Example Run Output
 Using provider: gemini
