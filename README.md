@@ -73,12 +73,6 @@ ai-agent-challenge/
 └── custom_parsers/           # Generated parser files
 
 
-### Main Challenge Demo
-[![Main Demo](https://img.shields.io/badge/Watch%20Main%20Demo-Video-blue)](https://drive.google.com/file/d/1bEs-zQPw7sCbjlVstlZXSm9ljP4LHXPJ/view?usp=sharing)
-
-### Extra Detailed Walkthrough
-[![Detailed Demo](https://img.shields.io/badge/Watch%20Detailed%20Demo-Video-orange)](https://drive.google.com/file/d/1TbRv5WsHl_qYvoovikHilu2hXv4dmkNd/view?usp=sharing)
-
 🧪 Example Run Output
 Using provider: gemini
 PDF: data\icici\icici_sample.pdf
