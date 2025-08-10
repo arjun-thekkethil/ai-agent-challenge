@@ -70,7 +70,7 @@ ai-agent-challenge/
 
 ### Main Challenge Demo
 
-[![Main Demo](https://img.shields.io/badge/Watch%20Main%20Demo-Video-blue)](https://drive.google.com/file/d/1bEs-nQp-7sCbjiVstI2XSweljP4LHKP3/view?usp=sharing)
+[![Main Demo](https://img.shields.io/badge/Watch%20Main%20Demo-Video-blue)]([https://drive.google.com/file/d/1bEs-nQp-7sCbjiVstI2XSweljP4LHKP3/view?usp=sharing](https://drive.google.com/file/d/1bEs-zQPw7sCbjlVstlZXSm9ljP4LHXPJ/view?usp=sharing))
 This is the 60-second demo required by the challenge -- showing a fresh clone -> `agent.py` -> `pytest` passing.
 
 ### Extra Detailed Walkthrough
