@@ -13,16 +13,20 @@ git clone https://github.com/<your-username>/ai-agent-challenge.git
 cd ai-agent-challenge
 git checkout -b feature/agent
 
+
 2️⃣ Create & Activate Virtual Environment
 python -m venv venv
+
 venv/Scripts/python.exe -m pip install --upgrade pip
 source venv/Scripts/activate
 3️⃣ Install Dependencies
 venv/Scripts/python.exe -m pip install -r requirements.txt
+
 4️⃣ Set API Key(s)
 Obtain a free Gemini API key from Google AI Studio.
 export GEMINI_API_KEY="your_gemini_key_here"
 export LLM_PROVIDER="gemini"
+
 5️⃣ Run the Agent for a Target
 Example: ICICI Bank
 python agent.py --target icici
@@ -62,6 +66,7 @@ ai-agent-challenge/
 │       ├── hdfc_sample.pdf
 │       └── hdfc_sample.csv
 └── custom_parsers/           # Generated parser files
+
 
 ## 📹 Demo Videos
 
